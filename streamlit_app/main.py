@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import requests
 import time
+import random
 
 # Configure page
 st.set_page_config(page_title="Global Weather Dashboard", layout="wide", initial_sidebar_state="expanded")
@@ -29,8 +30,25 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# API base URL
-API_URL = "http://localhost:8000"
+# Generate sample data for production
+@st.cache_data
+def generate_sample_data():
+    regions = ["New York", "London", "Tokyo", "Mumbai", "Sydney", "Paris", "Dubai", "Singapore"]
+    data = []
+    
+    for i in range(30):
+        date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+        for region in regions:
+            data.append({
+                "date": date,
+                "region": region,
+                "temperature": round(random.uniform(15, 35), 1),
+                "humidity": round(random.uniform(30, 90)),
+                "wind_speed": round(random.uniform(0, 30), 1),
+                "air_quality_index": round(random.uniform(20, 150)),
+                "precipitation": round(random.uniform(0, 100), 2)
+            })
+    return data
 
 # Title with style
 st.markdown("<h1 style='text-align: center;'>🌍 Global Weather Intelligence Dashboard</h1>", unsafe_allow_html=True)
@@ -50,14 +68,9 @@ with st.sidebar:
     
     # Region Selection
     st.subheader("Region Filter")
-    try:
-        stats_response = requests.get(f'{API_URL}/weather/stats')
-        if stats_response.status_code == 200:
-            regions = stats_response.json()['regions']
-            selected_region = st.selectbox("Select Region", ["All Regions"] + regions)
-    except:
-        st.error("Couldn't fetch regions")
-        selected_region = st.text_input("Enter Region")
+    sample_data = generate_sample_data()
+    regions = sorted(list(set(d["region"] for d in sample_data)))
+    selected_region = st.selectbox("Select Region", ["All Regions"] + regions)
     
     # Refresh Rate
     st.subheader("Refresh Settings")
@@ -67,22 +80,19 @@ with st.sidebar:
 
 def load_weather_data():
     try:
-        params = {'date': selected_date.strftime('%Y-%m-%d')}
-        if selected_region and selected_region != "All Regions":
-            params['region'] = selected_region
-            
-        response = requests.get(f'{API_URL}/weather', params=params)
+        # In production, use generated data
+        data = generate_sample_data()
         
-        if response.status_code == 200:
-            data = response.json()
-            if not data:
-                st.warning("No data found for the selected filters.")
-                return pd.DataFrame()
-            return pd.DataFrame(data)
-        else:
-            st.error(f"Error fetching data: {response.status_code}")
+        # Filter data based on selection
+        filtered_data = [d for d in data if d['date'] == selected_date.strftime('%Y-%m-%d')]
+        if selected_region != "All Regions":
+            filtered_data = [d for d in filtered_data if d['region'] == selected_region]
+        
+        if not filtered_data:
+            st.warning("No data found for the selected filters.")
             return pd.DataFrame()
             
+        return pd.DataFrame(filtered_data)
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
         return pd.DataFrame()
